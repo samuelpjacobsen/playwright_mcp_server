@@ -1,9 +1,9 @@
 FROM python:3.11-slim
 
-# Definir diretório de trabalho
 WORKDIR /app
 
-# Instalar dependências do sistema necessárias para Playwright
+RUN pip install --upgrade pip
+
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
@@ -16,47 +16,43 @@ RUN apt-get update && apt-get install -y \
     libgbm1 \
     libasound2 \
     libxrandr2 \
-    libasound2 \
     libpangocairo-1.0-0 \
     libatk1.0-0 \
     libcairo-gobject2 \
-    libgtk-3-0 \
     libgdk-pixbuf2.0-0 \
     libxss1 \
     libgconf-2-4 \
     curl \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar requirements primeiro (para melhor cache do Docker)
 COPY requirements.txt .
 
-# Instalar dependências Python
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir mcp>=1.0.0
+RUN pip install --no-cache-dir playwright>=1.40.0
+RUN pip install --no-cache-dir fastapi>=0.104.1
+RUN pip install --no-cache-dir uvicorn>=0.24.0
+RUN pip install --no-cache-dir pydantic>=2.5.0
+RUN pip install --no-cache-dir sseclient-py>=0.2.4
+RUN pip install --no-cache-dir requests>=2.31.0
+RUN pip install --no-cache-dir python-multipart>=0.0.6
 
-# Instalar browsers do Playwright
 RUN playwright install chromium
 
-# Instalar dependências dos browsers
 RUN playwright install-deps chromium
 
-# Copiar código da aplicação
 COPY server.py .
 COPY server_sse.py .
 
-# Criar diretório para screenshots
 RUN mkdir -p /app/screenshots
 
-# Expor porta
 EXPOSE 8000
 
-# Variáveis de ambiente
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8000
 ENV HOST=0.0.0.0
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Comando para executar o servidor SSE
 CMD ["python", "server_sse.py"]
