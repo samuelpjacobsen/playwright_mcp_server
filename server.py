@@ -172,7 +172,16 @@ class PlaywrightMCPServer:
         """Ensure browser is ready for use"""
         if not self.playwright:
             self.playwright = await async_playwright().start()
-            self.browser = await self.playwright.chromium.launch(headless=False)
+            self.browser = await self.playwright.chromium.launch(
+                headless=True,
+                args=[
+                    '--no-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-gpu',
+                    '--disable-extensions',
+                    '--no-first-run'
+                    ]
+            )
             self.context = await self.browser.new_context()
             self.page = await self.context.new_page()
     
@@ -192,29 +201,26 @@ class PlaywrightMCPServer:
         except Exception as e:
             return [TextContent(type="text", text=f"Failed to click on {selector}: {str(e)}")]
     
-    async def take_screenshot(self, path: Optional[str] = None, full_page: bool = False) -> List[TextContent]:
+    async def take_screenshot(self, path: str = "screenshot.png") -> List[TextContent]:
         """Take a screenshot"""
         try:
-            if not path:
-                path = f"screenshot_{int(time.time())}.png"
+            if not self.page:
+                await self.launch_browser()
+                
+            if not self.page:
+                return [TextContent(type="text", text="Failed to initialize browser for screenshot")]
+                
+            screenshot_path = f"/app/screenshots/{path}"
+            await self.page.screenshot(path=screenshot_path)
             
-            print(f"Salvando screenshot em: {path}")
-            
-            parent_dir = os.path.dirname(path)
-            if parent_dir and parent_dir != '.':
-                os.makedirs(parent_dir, exist_ok=True)
-            
-            await self.page.screenshot(path=path, full_page=full_page)
-            
-            if os.path.exists(path):
-                file_size = os.path.getsize(path)
-                print(f"Screenshot criado: {path} ({file_size} bytes)")
+            import os
+            if os.path.exists(screenshot_path):
+                file_size = os.path.getsize(screenshot_path)
                 return [TextContent(type="text", text=f"Screenshot saved to {path} ({file_size} bytes)")]
             else:
-                print(f"Falha: Screenshot não foi criado em {path}")
-                return [TextContent(type="text", text=f"Failed to save screenshot: file not created at {path}")]
+                return [TextContent(type="text", text=f"Screenshot file not found at {screenshot_path}")]
+                
         except Exception as e:
-            print(f"Erro ao salvar screenshot: {str(e)}")
             return [TextContent(type="text", text=f"Failed to take screenshot: {str(e)}")]
     
     async def type_text(self, selector: str, text: str, timeout: int = 30000) -> List[TextContent]:
@@ -242,9 +248,18 @@ class PlaywrightMCPServer:
             return [TextContent(type="text", text=f"Element {selector} did not appear: {str(e)}")]
     
     async def get_page_content(self) -> List[TextContent]:
-        """Get page HTML content"""
+        """Get the current page content"""
         try:
+            if not self.page:
+                await self.launch_browser()
+                
+            if not self.page:
+                return [TextContent(type="text", text="Failed to initialize browser for content extraction")]
+                
             content = await self.page.content()
+            if len(content) > 5000:
+                content = content[:5000] + "... (content truncated)"
+                
             return [TextContent(type="text", text=content)]
         except Exception as e:
             return [TextContent(type="text", text=f"Failed to get page content: {str(e)}")]
