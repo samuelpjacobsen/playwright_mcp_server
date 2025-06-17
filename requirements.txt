@@ -1,0 +1,8 @@
+mcp==1.9.4
+playwright==1.40.0
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==2.5.0
+sseclient-py==0.2.4
+requests==2.31.0
+python-multipart==0.0.6
