@@ -104,14 +104,83 @@ async def sse_endpoint():
         }
     )
 
-@app.post("/sse")
-async def sse_post_endpoint(data: dict):
-    """Endpoint POST SSE para enviar comandos"""
-    print(f"📥 Comando recebido: {data}")
-    try:
-        return {"status": "success", "data": data, "processed": True}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+@app.get("/sse")
+async def sse_endpoint():
+    """Endpoint SSE para N8N MCP Client - Protocolo MCP completo"""
+    
+    async def event_stream():
+        try:
+            server_info = {
+                "jsonrpc": "2.0",
+                "result": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {
+                        "tools": {},
+                        "resources": {},
+                        "prompts": {}
+                    },
+                    "serverInfo": {
+                        "name": "playwright-server",
+                        "version": "1.0.0"
+                    }
+                }
+            }
+            yield f"data: {json.dumps(server_info)}\n\n"
+            
+            tools_response = {
+                "jsonrpc": "2.0",
+                "result": {
+                    "tools": [
+                        {
+                            "name": "navigate",
+                            "description": "Navigate to a URL",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "url": {"type": "string", "description": "URL to navigate to"}
+                                },
+                                "required": ["url"]
+                            }
+                        },
+                        {
+                            "name": "get_page_content",
+                            "description": "Get current page content",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {}
+                            }
+                        }
+                    ]
+                }
+            }
+            yield f"data: {json.dumps(tools_response)}\n\n"
+            
+            counter = 0
+            while True:
+                await asyncio.sleep(30)
+                heartbeat = {
+                    "type": "ping",
+                    "timestamp": counter
+                }
+                yield f"data: {json.dumps(heartbeat)}\n\n"
+                counter += 1
+                
+        except asyncio.CancelledError:
+            print("🔌 Stream SSE cancelado pelo cliente")
+        except Exception as e:
+            print(f"❌ Erro no stream SSE: {e}")
+    
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*",
+            "X-Accel-Buffering": "no",
+        }
+    )
 
 @app.post("/mcp")
 async def mcp_endpoint(data: dict):
