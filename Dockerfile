@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y \
     libgconf-2-4 \
     curl \
     build-essential \
+    xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -51,8 +52,10 @@ EXPOSE ${PORT:-8000}
 ENV PYTHONUNBUFFERED=1
 ENV PORT=9000
 ENV HOST=0.0.0.0
+ENV DISPLAY=:99
+ENV PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
-CMD ["python", "server_sse.py"]
+CMD ["xvfb-run", "-a", "--server-args=-screen 0 1920x1080x24", "python", "server_sse.py"]
