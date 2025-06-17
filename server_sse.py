@@ -8,7 +8,7 @@ import uvicorn
 from server import PlaywrightMCPServer
 from mcp.server.models import InitializationOptions
 from mcp.types import ServerCapabilities
-
+import os
 class PlaywrightMCPServerSSE(PlaywrightMCPServer):
     """Versão SSE do servidor MCP para N8N"""
     
@@ -244,7 +244,9 @@ async def root():
     }
 
 if __name__ == "__main__":
+    port = int(os.getenv("PORT", 8000))
+    host = os.getenv("HOST", "0.0.0.0")
     print("🚀 Iniciando Playwright MCP Server SSE...")
-    print("📡 SSE endpoint: http://0.0.0.0:9000/sse")
-    print("🔧 MCP endpoint: http://0.0.0.0:9000/mcp")
-    uvicorn.run(app, host="0.0.0.0", port=9000, log_level="info")
+    print("📡 SSE endpoint: http://{host}:{port}/sse")
+    print("🔧 MCP endpoint: http://{host}:{port}/mcp")
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")

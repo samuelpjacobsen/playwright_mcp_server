@@ -46,13 +46,13 @@ COPY server_sse.py .
 
 RUN mkdir -p /app/screenshots
 
-EXPOSE 9000
+EXPOSE ${PORT:-8000}
 
 ENV PYTHONUNBUFFERED=1
 ENV PORT=9000
 ENV HOST=0.0.0.0
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:9000/health || exit 1
+    CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
 CMD ["python", "server_sse.py"]
