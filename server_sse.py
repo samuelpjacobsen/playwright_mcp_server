@@ -130,8 +130,19 @@ async def mcp_endpoint(data: dict):
                 "id": msg_id,
                 "result": {
                     "protocolVersion": "2024-11-05",
-                    "capabilities": {"tools": {}},
-                    "serverInfo": {"name": "playwright-server", "version": "1.0.0"}
+                    "capabilities": {
+                        "tools": {},
+                        "resources": {},
+                        "prompts": {},
+                        "roots": {
+                            "listChanged": False
+                        }
+                    },
+                    "serverInfo": {
+                        "name": "playwright-server", 
+                        "version": "1.0.0"
+                    },
+                    "instructions": "Playwright MCP Server ready for automation tasks"
                 }
             }
             print(f"✅ Initialize: {result}")
