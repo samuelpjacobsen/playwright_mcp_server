@@ -58,4 +58,4 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:9000/health || exit 1
 
-CMD ["xvfb-run", "-a", "--server-args=-screen 0 1920x1080x24", "python", "server_sse.py"]
+CMD ["xvfb-run", "-a", "--server-args=-screen 0 1920x1080x24", "python3", "server_sse.py"]

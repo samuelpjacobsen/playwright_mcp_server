@@ -26,17 +26,27 @@ class PlaywrightEngine:
                     headless=True,
                     args=[
                         '--no-sandbox',
-                        '--disable-setuid-sandbox', 
+                        '--disable-setuid-sandbox',
                         '--disable-dev-shm-usage',
                         '--disable-gpu',
                         '--disable-extensions',
                         '--disable-background-timer-throttling',
                         '--disable-backgrounding-occluded-windows',
                         '--disable-renderer-backgrounding',
-                        '--disable-features=TranslateUI',
+                        '--disable-features=TranslateUI,VizDisplayCompositor',
                         '--disable-web-security',
                         '--no-first-run',
-                        '--disable-default-apps'
+                        '--disable-default-apps',
+                        '--disable-sync',
+                        '--disable-background-networking',
+                        '--disable-component-extensions-with-background-pages',
+                        '--disable-client-side-phishing-detection',
+                        '--disable-hang-monitor',
+                        '--disable-prompt-on-repost',
+                        '--disable-ipc-flooding-protection',
+                        '--force-color-profile=srgb',
+                        '--memory-pressure-off',
+                        '--max_old_space_size=4096'
                     ]
                 )
                 
@@ -56,7 +66,7 @@ class PlaywrightEngine:
             traceback.print_exc()
             raise e
     
-    async def navigate(self, url: str, timeout: int = 30000) -> List[TextContent]:
+    async def navigate(self, url: str, timeout: int = 60000) -> List[TextContent]:
         """Navigate to a URL"""
         try:
             await self.page.goto(url, timeout=timeout, wait_until="networkidle")
@@ -76,7 +86,13 @@ class PlaywrightEngine:
         """Take a screenshot"""
         try:
             screenshot_path = f"/app/screenshots/{path}"
-            await self.page.screenshot(path=screenshot_path, full_page=True)
+            
+            await self.page.screenshot(
+                path=screenshot_path, 
+                full_page=True,
+                type='png',
+                quality=80
+            )
             
             import os
             if os.path.exists(screenshot_path):
