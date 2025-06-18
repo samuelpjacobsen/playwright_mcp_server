@@ -47,15 +47,16 @@ COPY server_sse.py .
 
 RUN mkdir -p /app/screenshots
 
-EXPOSE 9000
+EXPOSE ${PORT:-8000}
+
 
 ENV PYTHONUNBUFFERED=1
-ENV PORT=9000
+ENV PORT=${PORT:-8000}
 ENV HOST=0.0.0.0
 ENV DISPLAY=:99
 ENV PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:9000/health || exit 1
+    CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
 CMD ["xvfb-run", "-a", "--server-args=-screen 0 1920x1080x24", "python3", "server_sse.py"]
