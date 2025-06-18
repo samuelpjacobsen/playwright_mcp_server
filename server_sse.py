@@ -5,22 +5,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from server import PlaywrightMCPServer
-from mcp.server.models import InitializationOptions
-from mcp.types import ServerCapabilities
+from server_playwright import PlaywrightEngine
 import os
-class PlaywrightMCPServerSSE(PlaywrightMCPServer):
-    """Versão SSE do servidor MCP para N8N"""
-    
-    def __init__(self):
-        from mcp.server import Server
-        self.server = Server("playwright-server")
-        self.playwright = None
-        self.browser = None
-        self.context = None
-        self.page = None
-        self.setup_handlers()
-        self.initialized = False
 
 app = FastAPI(title="Playwright MCP Server SSE", version="1.0.0")
 
@@ -32,7 +18,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-server_instance = PlaywrightMCPServerSSE()
+playwright_engine = PlaywrightEngine()
 
 @app.get("/health")
 async def health():
@@ -41,7 +27,7 @@ async def health():
 
 @app.get("/sse")
 async def sse_endpoint():
-    """Endpoint SSE para N8N MCP Client - Protocolo MCP completo"""
+    """Endpoint SSE para N8N MCP Client"""
     
     async def event_stream():
         try:
@@ -75,6 +61,16 @@ async def sse_endpoint():
                                     "url": {"type": "string", "description": "URL to navigate to"}
                                 },
                                 "required": ["url"]
+                            }
+                        },
+                        {
+                            "name": "take_screenshot",
+                            "description": "Take a screenshot",
+                            "inputSchema": {
+                                "type": "object", 
+                                "properties": {
+                                    "path": {"type": "string", "description": "Screenshot path"}
+                                }
                             }
                         },
                         {
@@ -128,7 +124,7 @@ async def mcp_endpoint(data: dict):
         msg_id = data.get("id")
         
         if method == "initialize":
-            server_instance.initialized = True
+            playwright_engine.initialized = True
             result = {
                 "jsonrpc": "2.0",
                 "id": msg_id,
@@ -138,9 +134,7 @@ async def mcp_endpoint(data: dict):
                         "tools": {},
                         "resources": {},
                         "prompts": {},
-                        "roots": {
-                            "listChanged": False
-                        }
+                        "roots": {"listChanged": False}
                     },
                     "serverInfo": {
                         "name": "playwright-server", 
@@ -149,13 +143,9 @@ async def mcp_endpoint(data: dict):
                     "instructions": "Playwright MCP Server ready for automation tasks"
                 }
             }
-            print(f"✅ Initialize: {result}")
             return result
         
         elif method == "tools/list":
-            if not server_instance.initialized:
-                raise HTTPException(status_code=400, detail="Server not initialized")
-            
             tools = [
                 {
                     "name": "navigate",
@@ -188,38 +178,41 @@ async def mcp_endpoint(data: dict):
                         },
                         "required": ["selector"]
                     }
+                },
+                {
+                    "name": "get_page_content",
+                    "description": "Get page content", 
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {}
+                    }
                 }
             ]
             
-            result = {
+            return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
                 "result": {"tools": tools}
             }
-            print(f"📋 Tools list: {len(tools)} ferramentas")
-            return result
         
         elif method == "tools/call":
-            if not server_instance.initialized:
-                raise HTTPException(status_code=400, detail="Server not initialized")
-            
             tool_name = params.get("name")
             arguments = params.get("arguments", {})
             
             print(f"🛠️ Executando ferramenta: {tool_name} com args: {arguments}")
             
-            await server_instance.ensure_browser_ready()
+            await playwright_engine.ensure_browser_ready()
             
             if tool_name == "navigate":
-                result = await server_instance.navigate(arguments["url"])
+                result = await playwright_engine.navigate(arguments["url"])
             elif tool_name == "take_screenshot":
-                result = await server_instance.take_screenshot(arguments.get("path"))
+                result = await playwright_engine.take_screenshot(arguments.get("path", "screenshot.png"))
             elif tool_name == "click":
-                result = await server_instance.click(arguments["selector"])
+                result = await playwright_engine.click(arguments["selector"])
             elif tool_name == "type_text":
-                result = await server_instance.type_text(arguments["selector"], arguments["text"])
+                result = await playwright_engine.type_text(arguments["selector"], arguments["text"])
             elif tool_name == "get_page_content":
-                result = await server_instance.get_page_content()
+                result = await playwright_engine.get_page_content()
             else:
                 raise HTTPException(status_code=400, detail=f"Unknown tool: {tool_name}")
             
@@ -250,8 +243,8 @@ async def root():
         "service": "Playwright MCP Server SSE",
         "version": "1.0.0",
         "endpoints": {
-            "sse": "/sse (GET para stream, POST para comandos)",
-            "mcp": "/mcp (comandos MCP principais)",
+            "sse": "/sse",
+            "mcp": "/mcp",
             "health": "/health"
         },
         "n8n_compatible": True,
@@ -262,6 +255,6 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     host = os.getenv("HOST", "0.0.0.0")
     print("🚀 Iniciando Playwright MCP Server SSE...")
-    print("📡 SSE endpoint: http://{host}:{port}/sse")
-    print("🔧 MCP endpoint: http://{host}:{port}/mcp")
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+    print(f"📡 SSE endpoint: http://{host}:{port}/sse")
+    print(f"🔧 MCP endpoint: http://{host}:{port}/mcp")
+    uvicorn.run(app, host=host, port=port, log_level="info")

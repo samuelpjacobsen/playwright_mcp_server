@@ -43,6 +43,7 @@ RUN playwright install chromium
 RUN playwright install-deps chromium
 
 COPY server.py .
+COPY server_playwright.py .
 COPY server_sse.py .
 
 RUN mkdir -p /app/screenshots
