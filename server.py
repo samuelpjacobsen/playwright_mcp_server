@@ -167,23 +167,49 @@ class PlaywrightMCPServer:
                     return [TextContent(type="text", text=f"Unknown tool: {name}")]
             except Exception as e:
                 return [TextContent(type="text", text=f"Error: {str(e)}")]
-    
+        
     async def ensure_browser_ready(self):
         """Ensure browser is ready for use"""
-        if not self.playwright:
-            self.playwright = await async_playwright().start()
-            self.browser = await self.playwright.chromium.launch(
-                headless=True,
-                args=[
-                    '--no-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-gpu',
-                    '--disable-extensions',
-                    '--no-first-run'
+        try:
+            if not self.playwright:
+                print("🚀 Iniciando Playwright...")
+                self.playwright = await async_playwright().start()
+                
+            if not self.browser:
+                print("🌐 Lançando Chromium...")
+                self.browser = await self.playwright.chromium.launch(
+                    headless=True,
+                    args=[
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-gpu',
+                        '--disable-extensions',
+                        '--disable-background-timer-throttling',
+                        '--disable-backgrounding-occluded-windows',
+                        '--disable-renderer-backgrounding',
+                        '--disable-features=TranslateUI',
+                        '--disable-web-security',
+                        '--no-first-run',
+                        '--disable-default-apps'
                     ]
-            )
-            self.context = await self.browser.new_context()
-            self.page = await self.context.new_page()
+                )
+                
+            if not self.context:
+                print("📱 Criando contexto do browser...")
+                self.context = await self.browser.new_context()
+                
+            if not self.page:
+                print("📄 Abrindo nova página...")
+                self.page = await self.context.new_page()
+                
+            print("✅ Browser pronto para uso!")
+            
+        except Exception as e:
+            print(f"❌ Erro ao preparar browser: {e}")
+            import traceback
+            traceback.print_exc()
+            raise e
     
     async def navigate(self, url: str, timeout: int = 30000) -> List[TextContent]:
         """Navigate to a URL"""
@@ -204,9 +230,8 @@ class PlaywrightMCPServer:
     async def take_screenshot(self, path: str = "screenshot.png") -> List[TextContent]:
         """Take a screenshot"""
         try:
-            if not self.page:
-                await self.launch_browser()
-                
+            await self.ensure_browser_ready()
+            
             if not self.page:
                 return [TextContent(type="text", text="Failed to initialize browser for screenshot")]
                 
@@ -250,9 +275,8 @@ class PlaywrightMCPServer:
     async def get_page_content(self) -> List[TextContent]:
         """Get the current page content"""
         try:
-            if not self.page:
-                await self.launch_browser()
-                
+            await self.ensure_browser_ready()
+            
             if not self.page:
                 return [TextContent(type="text", text="Failed to initialize browser for content extraction")]
                 
