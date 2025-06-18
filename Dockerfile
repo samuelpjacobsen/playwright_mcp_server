@@ -47,14 +47,12 @@ COPY server_sse.py .
 
 RUN mkdir -p /app/screenshots
 
-EXPOSE ${PORT:-8000}
-
-
 ENV PYTHONUNBUFFERED=1
-ENV PORT=${PORT:-8000}
 ENV HOST=0.0.0.0
 ENV DISPLAY=:99
 ENV PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
+
+EXPOSE 3000 3001 8000 9000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8000}/health || exit 1

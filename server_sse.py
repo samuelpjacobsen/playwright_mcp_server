@@ -1,12 +1,12 @@
 import asyncio
 import json
+import os
 from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from server_playwright import PlaywrightEngine
-import os
 
 app = FastAPI(title="Playwright MCP Server SSE", version="1.0.0")
 
@@ -22,109 +22,50 @@ playwright_engine = PlaywrightEngine()
 
 @app.get("/health")
 async def health():
-    """Health check"""
-    return {"status": "healthy", "service": "playwright-mcp-server-sse"}
+    """Health check endpoint"""
+    return {
+        "status": "healthy", 
+        "service": "playwright-mcp-server-sse",
+        "port": os.getenv("PORT", "unknown"),
+        "host": os.getenv("HOST", "unknown"),
+        "version": "1.0.0"
+    }
 
-@app.get("/sse")
-async def sse_endpoint():
-    """Endpoint SSE para N8N MCP Client"""
+@app.get("/")
+async def root():
+    """Root endpoint with service info"""
+    port = os.getenv("PORT", "unknown")
+    host = os.getenv("HOST", "0.0.0.0")
     
-    async def event_stream():
-        try:
-            server_info = {
-                "jsonrpc": "2.0",
-                "result": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {
-                        "tools": {},
-                        "resources": {},
-                        "prompts": {}
-                    },
-                    "serverInfo": {
-                        "name": "playwright-server",
-                        "version": "1.0.0"
-                    }
-                }
-            }
-            yield f"data: {json.dumps(server_info)}\n\n"
-            
-            tools_response = {
-                "jsonrpc": "2.0",
-                "result": {
-                    "tools": [
-                        {
-                            "name": "navigate",
-                            "description": "Navigate to a URL",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "url": {"type": "string", "description": "URL to navigate to"}
-                                },
-                                "required": ["url"]
-                            }
-                        },
-                        {
-                            "name": "take_screenshot",
-                            "description": "Take a screenshot",
-                            "inputSchema": {
-                                "type": "object", 
-                                "properties": {
-                                    "path": {"type": "string", "description": "Screenshot path"}
-                                }
-                            }
-                        },
-                        {
-                            "name": "get_page_content",
-                            "description": "Get current page content",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {}
-                            }
-                        }
-                    ]
-                }
-            }
-            yield f"data: {json.dumps(tools_response)}\n\n"
-            
-            counter = 0
-            while True:
-                await asyncio.sleep(30)
-                heartbeat = {
-                    "type": "ping",
-                    "timestamp": counter
-                }
-                yield f"data: {json.dumps(heartbeat)}\n\n"
-                counter += 1
-                
-        except asyncio.CancelledError:
-            print("🔌 Stream SSE cancelado pelo cliente")
-        except Exception as e:
-            print(f"❌ Erro no stream SSE: {e}")
-    
-    return StreamingResponse(
-        event_stream(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "*",
-            "X-Accel-Buffering": "no",
-        }
-    )
+    return {
+        "service": "Playwright MCP Server SSE",
+        "version": "1.0.0",
+        "status": "running",
+        "port": port,
+        "host": host,
+        "endpoints": {
+            "health": "/health",
+            "sse": "/sse", 
+            "mcp": "/mcp"
+        },
+        "mcp_compatible": True,
+        "playwright_ready": playwright_engine.initialized
+    }
 
 @app.post("/mcp")
 async def mcp_endpoint(data: dict):
-    """Endpoint principal para comandos MCP"""
-    print(f"🔧 Comando MCP: {data}")
+    """Main MCP endpoint"""
+    print(f"📨 MCP Request: {json.dumps(data, indent=2)}")
     
     try:
         method = data.get("method")
         params = data.get("params", {})
         msg_id = data.get("id")
         
+        print(f"🎯 Method: {method}, ID: {msg_id}")
+        
         if method == "initialize":
-            playwright_engine.initialized = True
+            print("🚀 Initializing MCP server...")
             result = {
                 "jsonrpc": "2.0",
                 "id": msg_id,
@@ -137,15 +78,18 @@ async def mcp_endpoint(data: dict):
                         "roots": {"listChanged": False}
                     },
                     "serverInfo": {
-                        "name": "playwright-server", 
+                        "name": "playwright-server",
                         "version": "1.0.0"
                     },
-                    "instructions": "Playwright MCP Server ready for automation tasks"
+                    "instructions": "Playwright MCP Server ready for browser automation"
                 }
             }
+            playwright_engine.initialized = True
+            print("✅ MCP server initialized successfully")
             return result
         
         elif method == "tools/list":
+            print("📋 Listing available tools...")
             tools = [
                 {
                     "name": "navigate",
@@ -159,18 +103,18 @@ async def mcp_endpoint(data: dict):
                     }
                 },
                 {
-                    "name": "take_screenshot",
-                    "description": "Take a screenshot",
+                    "name": "take_screenshot", 
+                    "description": "Take a screenshot of current page",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
-                            "path": {"type": "string", "description": "Screenshot path"}
+                            "path": {"type": "string", "description": "Screenshot filename", "default": "screenshot.png"}
                         }
                     }
                 },
                 {
                     "name": "click",
-                    "description": "Click on element",
+                    "description": "Click on an element",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -180,8 +124,20 @@ async def mcp_endpoint(data: dict):
                     }
                 },
                 {
+                    "name": "type_text",
+                    "description": "Type text into an element",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "selector": {"type": "string", "description": "CSS selector"},
+                            "text": {"type": "string", "description": "Text to type"}
+                        },
+                        "required": ["selector", "text"]
+                    }
+                },
+                {
                     "name": "get_page_content",
-                    "description": "Get page content", 
+                    "description": "Get current page HTML content",
                     "inputSchema": {
                         "type": "object",
                         "properties": {}
@@ -189,17 +145,20 @@ async def mcp_endpoint(data: dict):
                 }
             ]
             
-            return {
+            result = {
                 "jsonrpc": "2.0",
                 "id": msg_id,
                 "result": {"tools": tools}
             }
+            print(f"✅ Listed {len(tools)} tools")
+            return result
         
         elif method == "tools/call":
             tool_name = params.get("name")
             arguments = params.get("arguments", {})
             
-            print(f"🛠️ Executando ferramenta: {tool_name} com args: {arguments}")
+            print(f"🔧 Calling tool: {tool_name}")
+            print(f"📝 Arguments: {arguments}")
             
             await playwright_engine.ensure_browser_ready()
             
@@ -219,42 +178,91 @@ async def mcp_endpoint(data: dict):
             response = {
                 "jsonrpc": "2.0",
                 "id": msg_id,
-                "result": {"content": [{"type": "text", "text": result[0].text}]}
+                "result": {
+                    "content": [{"type": "text", "text": result[0].text}]
+                }
             }
-            print(f"✅ Resultado: {result[0].text}")
+            
+            print(f"✅ Tool result: {result[0].text}")
             return response
         
         else:
+            print(f"❌ Unknown method: {method}")
             raise HTTPException(status_code=400, detail=f"Unknown method: {method}")
             
     except Exception as e:
+        print(f"❌ Error processing MCP request: {e}")
+        import traceback
+        traceback.print_exc()
+        
         error_response = {
             "jsonrpc": "2.0",
             "id": data.get("id"),
-            "error": {"code": -32603, "message": str(e)}
+            "error": {
+                "code": -32603,
+                "message": str(e),
+                "data": {"type": type(e).__name__}
+            }
         }
-        print(f"❌ Erro: {e}")
         return error_response
 
-@app.get("/")
-async def root():
-    """Root endpoint"""
-    return {
-        "service": "Playwright MCP Server SSE",
-        "version": "1.0.0",
-        "endpoints": {
-            "sse": "/sse",
-            "mcp": "/mcp",
-            "health": "/health"
-        },
-        "n8n_compatible": True,
-        "status": "ready"
-    }
+@app.get("/sse")
+async def sse_endpoint():
+    """Server-Sent Events endpoint for streaming"""
+    async def event_generator():
+        try:
+            yield f"data: {json.dumps({'type': 'connected', 'timestamp': asyncio.get_event_loop().time()})}\n\n"
+            
+            counter = 0
+            while True:
+                await asyncio.sleep(30)
+                heartbeat = {
+                    "type": "heartbeat",
+                    "counter": counter,
+                    "timestamp": asyncio.get_event_loop().time()
+                }
+                yield f"data: {json.dumps(heartbeat)}\n\n"
+                counter += 1
+                
+        except asyncio.CancelledError:
+            print("🔌 SSE connection cancelled")
+        except Exception as e:
+            print(f"❌ SSE error: {e}")
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "X-Accel-Buffering": "no",
+        }
+    )
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     host = os.getenv("HOST", "0.0.0.0")
-    print("🚀 Iniciando Playwright MCP Server SSE...")
-    print(f"📡 SSE endpoint: http://{host}:{port}/sse")
-    print(f"🔧 MCP endpoint: http://{host}:{port}/mcp")
-    uvicorn.run(app, host=host, port=port, log_level="info")
+    
+    print("🚀 INICIANDO PLAYWRIGHT MCP SERVER SSE")
+    print("=" * 50)
+    print(f"🌐 Host: {host}")
+    print(f"🔌 Port: {port}")
+    print(f"📡 Health: http://{host}:{port}/health")
+    print(f"🔧 MCP: http://{host}:{port}/mcp")
+    print(f"📡 SSE: http://{host}:{port}/sse")
+    print("=" * 50)
+    
+    print("🔧 ENVIRONMENT VARIABLES:")
+    for key in ["PORT", "HOST", "DISPLAY", "COOLIFY_FQDN"]:
+        value = os.getenv(key, "not set")
+        print(f"   {key}: {value}")
+    print("=" * 50)
+    
+    uvicorn.run(
+        app, 
+        host=host, 
+        port=port, 
+        log_level="info",
+        access_log=True
+    )
